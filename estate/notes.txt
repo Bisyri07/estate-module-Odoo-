@@ -1,0 +1,643 @@
+Here is a list of common domain operators you can use in Odoo:
+
+= : Equals
+!= : Not equal
+> : Greater than (escaped as &gt; in XML)
+< : Less than (escaped as &lt; in XML)
+>= : Greater than or equal to (escaped as &gt;= in XML)
+<= : Less than or equal to (escaped as &lt;= in XML)
+like : Like (for pattern matching)
+ilike : Case-insensitive like
+in : In a list of values
+not in : Not in a list of values
+
+==============================================================
+CREATE CUSTOM FILTER
+
+list of tuple can contain multiple conditions or tuples
+<filter name="Postcode > 0" domain="[('postcode', '&gt;', 0)]" />
+
+==============================================================
+SQL CONSTRAINTS
+
+1. UNIQUE Constraint
+* Purpose: Ensures all values in a column are unique across the table.
+* Example: Ensure each property name is unique
+
+_sql_constraints = [
+    ('unique_name', 'UNIQUE(name)', 'The name must be unique.')
+]
+
+--------------------------------------------------------------
+2. CHECK Constraint
+* Purpose: Ensures all values in a column satisfy a specific condition.
+* Example: Ensure the price is greater than zero.
+
+_sql_constraints = [
+    ('check_price_positive', 'CHECK(price > 0)', 'The price must be positive.')
+]
+
+--------------------------------------------------------------
+3. NOT NULL Constraint
+* Purpose: Ensures a column cannot have NULL values. In Odoo, this is usually managed directly in the field definition.
+* Example: Ensure name field cannot be NULL.
+
+name = fields.Char(string='Name', required=True)
+
+--------------------------------------------------------------
+4. PRIMARY KEY Constraint
+Purpose: Uniquely identifies each record in a table. In Odoo, the primary key is typically the id field and is managed automatically by Odoo.
+Example: Typically managed by Odoo for the id field.
+
+--------------------------------------------------------------
+5. FOREIGN KEY Constraint
+Purpose: Ensures the value in one table matches values in another table, maintaining referential integrity.
+Example: Ensure category_id in estate_property matches id in estate_category.
+
+
+--------------------------------------------------------------
+PYTHON CONSTRAINTS
+
+from odoo.exceptions import ValidationError
+@api.constrains('selling_price', 'expected_price')
+    def _checking_price(self):
+        for record in self:
+            if record.selling_price <= 0:
+                raise  ValidationError("The selling price must be positive value.")
+            if record.expected_price <= record.selling_price:
+                raise ValidationError("The expected value must higher than selling price")
+
+==============================================================
+COMPUTED FIELD
+
+@api.depends('living_area', 'garden_area')
+    def _compute_total_area(self):
+        for a in self:
+            a.total_area = a.living_area + a.garden_area
+
+--------------------------------------------------------------
+A SPECIFIED FIELD IS CHANGED
+
+@api.onchange("garden")
+def _onchange_garden(self):
+    if self.garden:
+        self.garden_area = 10
+        self.garden_orientation = "N"
+    else:
+        self.garden_area = 0
+        self.garden_orientation = False
+
+==============================================================
+MENU PRIORITY (menu sequence) example sequence="0"
+
+<menuitem id="estate_menu_root" name="Estate Application" sequence="0">
+        <menuitem id="estate_master_data_menu" name="Master Data">
+            <menuitem 
+                id="estate_property_menu_action" 
+                action="estate_property_action"
+            />
+        </menuitem>
+</menuitem>
+
+==============================================================
+OVERRIDING EXISTING ODOO METHODS
+
+@api.model
+    def create(self, vals):
+        if vals.get("selling_price") and vals.get("date_availability"):
+            vals["state"] = "offer_received"
+
+        return super().create(vals)
+    
+    def unlink(self):
+        if not set(self.mapped("state")) <= {"new", "canceled"}:
+            raise UserError("Only new and canceled properties can be deleted")
+        
+        return super().unlink()
+
+    def create(self, vals):
+        if vals.get("property_id") and vals.get("price")
+        prop = self.env["estate.property"].browser(vals["property_id"])
+        # check if the offer is higher than the existing offers 
+        if prop.offer_ids: 
+            max_offer = max(prop.mapped("offer_ids.price"))
+            if float_compare(vals["price"], max_offer, precision_rounding=0.01)<=0:
+                raise UserError("the offer must be higher than %.2f" % max_offer)
+            prop.state = "offer_received"
+        return super().create(vals)
+
+==============================================================
+DUMMY Data
+
+in folder
+estate
+      |- data 
+             |- estate.property.csv
+
+__init__.py
+__manifest__.py -> add the path in 'data' = ['data/estate.property.csv']
+
+in estate.property.csv:
+"id", "name", "state"
+"estate_property_1", "Tipe Rumah 21/24", "new"   
+"estate_property_2", "Tipe Rumah 36", "ready"   
+"estate_property_3", "Rumah Type 45", "sold"   
+"estate_property_4", "Rumah Type 54", "new"   
+"estate_property_5", "Rumah Type 60", "new"   
+"estate_property_6", "Rumah Type 70", "new"   
+"estate_property_7", "Rumah Type 90", "new"   
+"estate_property_8", "Rumah Type 120", "new"   
+"estate_property_9", "Rumah Type 140-200", "new"   
+"estate_property_10", "Rumah Mewah Tipe di Atas 200", "new" 
+
+
+==============================================================
+SCHEDULER 
+
+1. activate developer mode
+
+make a xml file inthe views folder to make a scheduler like below: 
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <record id="ir_cron_regular_update_state" model="ir.cron">
+        <field name="name">Scheduler for updating the state of property</field>
+        <field name="model_id" ref="estate.model_estate_property"/>
+        <field name="type">ir.action.server</field>
+        <field name="state">code</field>
+        <field name="code">model.update_status_scheduler()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="numbercall">-1</field>
+        <field name="nextcall" eval="(DateTime.now()).strftime('%Y-%m-%d 17:00:00')"/>
+        <field name="priority">5</field>
+        <field name="active" eval="True"/>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="doall">1</field>  
+    </record>
+</odoo>
+
+2. make a function or method inside your class
+def update_status_scheduler(self):
+        if not self.date_availability:
+            self.env["estate.property"].search([('date_availability', '=', False)]).write({"state":"canceled"})  
+
+3. add it to __manifest__.py
+
+4. go to Settings app > Technical > Automation: Scheduled Actions 
+
+*in `name="doall"` 1 for all records and 0 only for existing record 
+cron job is Scheduler or doing task in certain period* 
+
+
+==============================================================
+SENDING AN EMAIL
+SMTP (Simple Mail Transfer Protocol)
+
+1. go to Setting app > Technical > Email: Outgoing Mail Servers
+2. click a new Outgoing mail servers 
+3. Authenticate with username, choose SSL/TLS connection encryption
+4. generate app password copy this link to learn how to make it: https://youtu.be/2D8jpws-4hA?si=5oAj2g-1vhE2f6Ih
+5. fill the rest of requirement:
+- smtp port:465 
+- SMTP Server: smtp.gmail.com
+- Username: youremail@gmail.com (this must match with the email of app password you've created)
+6. save it 
+7. click connection button at the top
+
+8. add a new file for sending email view
+email_templates.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="simple_example_email_template" model="mail.template">
+            <field name="name">Example Email Template</field>
+            <field name="subject">{{object.name}} Example Email Template</field>
+            <field name="model_id" ref="estate.model_estate_property" />
+            <field name="body_html" type="html">
+                <table 
+                    border="0" 
+                    cellpadding="0" 
+                    cellspacing="0" 
+                    style="padding-top: 16px; background-color: #F1F1F1; color: blue; width: 100%; border-collapse:separate;">
+                    <tr>
+                        <td>Name</td>
+                        <td>Post Code</td>
+                        <td>Date Availability</td>
+                    </tr>
+                    <tr>
+                        <td><t t-out="object.name or ''">Estate Name</t></td>
+                        <td>{{object.postcode}}</td>
+                        <td>{{object.date_availability}}</td>
+                    </tr>
+                </table>
+            </field>
+        </record>
+    </data>
+</odoo>
+
+9. between id in xml file and in the method must match for exmaple:
+def action_send_email(self):
+                                # module      id from xml file
+        template = self.env.ref("estate.simple_example_email_template")
+
+10. add button in estate_property.xml for sending an email:
+<button 
+name="action_send_email" 
+type="object" 
+string="Send Email" />
+
+11. add 'templates/email_templates.xml' in __manifest__.py
+12. and add 'mail' in depends list like this:
+    'depends': ['base','mail'],
+
+13. go to setting > Technical > Email Templates > type 'Example Email Template' 
+
+14. {{object.name}} 
+      name: "Luxury Villa"
+   object -> name
+   name -> "Luxury Villa"
+
+==============================================================
+INSTALL CUSTOM module
+
+1. cd C:\Odoo\python\Scripts
+2. dir
+3. Scripts\pip.exe freeze
+4. pip.exe install google-cloud-storage==2.9.0
+5. pip list
+6. extract the zip file from odoo Apps storage
+7. and put in in the same directory with your module.
+   in this case in this folder C:\Odoo\server\addons
+if there are some requirements to install more packages and your python packages
+directory isn't in the same directory with odoo python directory
+just cope all packages from to C:\Odoo\python
+(if the installation not in C:\Odoo\python but in 
+c:\users\bisyr\appdata\local\programs\python\python312\lib\site-packages
+just copy all the necessary packages like google (api, auth, cloud, cachetools) etc
+to this C:\Odoo\python) 
+
+==============================================================
+MANY TO ONE RELATION TO EXISTING TABLE
+
+user_id = fields.Many2one("res.users", 
+                          string="salesman", 
+                          default=lambda self: self.env.user)
+
+fields.Many2one("res.users"): This defines a Many-to-one relationship field. 
+    It creates a link to the res.users model, which is the model for users in Odoo. 
+    Essentially, this field will store a reference to a user.
+
+string="salesman": This specifies the label for the field 
+    when displayed in the user interface. The label will be "salesman".
+
+default=lambda self: self.env.user: This sets the default value of the field 
+    to the current user. self.env.user retrieves the current user, 
+    and the lambda function ensures that this value is dynamically set 
+    when a new record is created.
+
+==============================================================
+MANY TO ONE RELATION TO NEW TABLE
+
+property_type_id = fields.Many2one("estate.property.type", string="Property Type")
+it means one estate property datat has only one estate property type 
+
+In __manifest__.py the order of views in 'data' list is very important 
+
+Ensure that your XML files are loaded in the correct order. 
+If the action is defined after it is referenced, it can cause this issue.
+
+What is an Action?
+In Odoo, an action defines what happens when you select a menu item. 
+Actions can open a form, a list view, or perform other operations. 
+They are typically defined in XML files within your module 
+and are associated with models.
+
+Here’s an example of an action definition:
+<record id="estate_property_type_action" model="ir.actions.act_window">
+    <field name="name">Property Types</field>
+    <field name="res_model">estate.property.type</field>
+    <field name="view_mode">tree,form</field>
+</record>
+
+What is Referenced?
+When you create a menu item in Odoo, 
+you reference an action to tell Odoo what to do when the menu item is clicked. 
+The reference is made using the action attribute of the <menuitem> tag.
+
+Here’s an example of a menu item referencing an action:
+<menuitem 
+    id="estate_property_type_menu_action" 
+    action="estate_property_type_action"
+/>
+
+estate_property_type.xml is like a pop up LOV to estate_property.xml
+
+==============================================================
+ONE TO MANY RELATION TO NEW TABLE
+
+
+A One2many field defines a one-to-many relationship, 
+meaning that one record of the current model can be linked 
+to many records of the target model.
+
+property_ids = fields.One2many("estate.property", 
+                               "property_type_id", 
+                               string="Properties")
+
+In this example, the EstatePropertyType model has a One2many field called property_ids. 
+This means that each property type can be linked to many properties. 
+The One2many field is defined by specifying the target model (estate.property) and 
+the field in the target model that establishes the link (property_type_id).
+
+estate property type is like pop up LOV in estate property
+
+The placement of `_view_tree` and `_action` greatly affects the appearance. 
+because menu.xml is at the bottom of all views if `_view_tree` and `_action` 
+are not in menu.xml then they will not appear
+
+
+==============================================================
+ODOO SCAFFOLD
+
+Odoo Scaffold adalah fitur yang disediakan oleh Odoo 
+untuk mempercepat proses pembuatan modul baru. Ia menciptakan sebuah template modul dasar yang mencakup komponen-komponen penting seperti:
+
+Model data: Struktur dasar untuk menyimpan informasi.
+View: Antarmuka pengguna untuk menampilkan dan mengelola data.
+Controller: Logika bisnis yang mengontrol tindakan pengguna.
+
+cara membuatnya sebagai berikut:
+1. copy python path dgn "" seperti -> "C:\Odoo\python\python.exe"
+
+2. copy server path dgn "" seperti -> "C:\Odoo\server\odoo-bin"
+
+3. maka command scaffold seperti ini:
+"C:\Odoo\python\python.exe" "C:\Odoo\server\odoo-bin" scaffold
+
+4. paste di cmd lalu enter, maka akana tampil seperti ini:
+C:\Users\bisyr>"C:\Odoo\python\python.exe" "C:\Odoo\server\odoo-bin" scaffold
+usage: odoo-bin scaffold [-h] [-t TEMPLATE] name [dest]
+
+Generates an Odoo module skeleton.
+
+positional arguments:
+  name                  Name of the module to create
+  dest                  Directory to create the module in (default: .)
+
+options:
+  -h, --help            show this help message and exit
+  -t TEMPLATE, --template TEMPLATE
+                        Use a custom module template, can be a template name or the path to a module template
+                        (default: default)
+
+Built-in templates available are: default, l10n_payroll, theme
+
+5. sekarang kita bakal buat di dalam folder yg sama dengan module estate
+dan backup_to_gpc yaitu di dalam folder addons
+
+"C:\Odoo\python\python.exe" "C:\Odoo\server\odoo-bin" scaffold learn_costumization "C:\Odoo\server\addons"
+
+6. Jika menggunakan PowerShell, perintah yang sama mungkin membutuhkan sintaks berbeda:
+& "C:\Odoo\python\python.exe" "C:\Odoo\server\odoo-bin" scaffold learn_customization "C:\Odoo\server\addons"
+
+& digunakan di PowerShell untuk menjalankan program dengan jalur yang memiliki spasi.
+
+
+==============================================================
+CLASS INHERITANCE (Customizing existing model)
+
+contoh scripts nya:
+from odoo import models, fields
+
+class EstatePropertyTagInheritance(models.Model):
+    _inherit = "estate.property.tag"
+
+    priority = fields.Integer(string="Tag Priority", default=0 )
+
+kita tidak bisa merubah attribute didalam class yang sudah terdefinisi 
+di dalam class inheritance. 
+contoh kita tidak bisa merubah `color` attribute dan merubahnya di dalam 
+EstatePropertyTagInheritance class. akan terjadi Internal Server Error
+
+kalau kita menambahkan module didalam __manifest__.py terutama didalam depends list
+maka harus upgrade module barunya.
+contoh:
+1. 'depends': ['base', 'estate', 'sale'],
+2. upgrade module learn_customization
+3. dan cari attribute apa yang telah dibuat disini ada client_doc_number
+
+==============================================================
+COSTUMIZING EXISTING VIEW (inherit from sale module)
+
+cara melihat metadata
+1. activate developer mode 
+2. click `bug` icon 
+3. click View Metadata
+4. or click Get View
+
+kalau kita mau menambahkan kolom isian pada form.
+1. tulis di models.py yg telah dibuat ⬇
+class SalesOrderInherited(models.Model):
+    _inherit = "sale.order"
+    client_doc_number = fields.Char(string="SO Client Number")
+
+2. tulis ini di views ⬇
+<record id="sale_order_form_inherit" model="ir.ui.view">
+    <field name="name">sale.order.form.inherit.client_document</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
+    <field name="arch" type="xml">
+        <xpath expr="//field[@name='partner_id']" position="after">
+        <field name="client_doc_number"/>
+        </xpath>
+    </field>
+</record>
+
+3. lihat mau ditaruh dimana kolom isian barunya. disini saya taruh setelah partner_id
+4. restart odoo service
+5. upgrade module yg telah dibuat disini saya upgrade learn_costumization
+6. aktifkan developer mode 
+7. buka form yang dituju disini saya membuka sale.order.form 
+8. kalau terlihat sale.order.form.inherit.client_document dibagian inherited view,
+   maka class inheritance nya berhasil
+9. buka module sale lalu pilih salah satu list data (buat kalau blm ada)
+10. maka akan terlihat isian kolom baru di dalam form sales orders
+
+# position dari kolom isian bisa: inside/replace/before/after/attribute
+
+  <xpath expr="//field[@name='partner_id']" position="after">
+  <field name="client_doc_number"/>
+
+  contoh disini terlihat bahwa kolom client_doc_number 
+  (nama kolomnya SO Client Number) berada setelah 'after'
+  partner_id (nama kolomnya Customer)
+
+# Menambahkan kolom pada list view di dalam existing model 
+
+1. kita harus menambahkan record ID view_tree di file xml (views) nya apabila 
+   ingin melihat external ID melalui Edit View: list
+2. copy external ID nya 
+3. lalu tambahkan record id list inherit menggunakan model id yang dituju
+   views.xml barunya. contoh:
+
+    <record id="estate_property_tag_list_inherit" model="ir.ui.view">
+      <field name="name">estate.property.tag.list.inherit</field>
+      <field name="model">estate.property.tag</field>
+      <field name="inherit_id" ref="estate.estate_property_tag_view_tree"/>
+      <field name="arch" type="xml">
+          <field name="color" position="before">
+            <field name="priority"/>
+          </field>    
+      </field>
+    </record> 
+
+4. nama, model menggunakan target model yg dituju (disini tag property)
+5. field nya diisi dgn field dari class inheritance nya. contoh:
+   priority = fields.Integer(string="Tag Priority", default=0 )
+   dari class EstatePropertyTagInheritance dalam models.py baru yg kita buat
+
+==============================================================
+QWEB REPORT (printable pdf report)
+
+1. gunakan record id = 'action_report_estate_property_template' model='ir.action.report'
+2. lalu dengan field field nya yang diinginkan
+3. template id="report_estate"
+4. lihat contoh di bawah:
+
+<odoo>
+    <data>
+        <!-- create print action for estate property data -->
+        <record id="action_report_estate_property_template" model="ir.actions.report">
+            <field name="name">Estate Property Report</field>
+            <field name="model">estate.property</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">estate.report_estate</field>
+            <field name="report_file">estate.report_estate</field>
+            <field name="print_report_name">'Estate Property Report - %s' % (object.name)</field>
+	        <field name="binding_model_id" ref="estate.model_estate_property"/>
+	        <field name="binding_type">report</field>
+        </record>
+
+        <!-- Qweb templates (main template) -->
+        <template id="report_estate">
+            <t t-call="web.html_container">
+	            <t t-foreach="docs" t-as="doc">
+	                <t t-call="estate.report_estate_property_document" 
+                       t-lang="doc.buyer_id.lang or 'en_US'"/>
+	            </t>
+	        </t>
+        </template>
+
+        <!-- pdf format / Detailed Template (report_estate_property_document) -->
+        <template id="report_estate_property_document">
+            <t t-call="web.external_layout">
+                <!-- CSS -->
+                <style>
+                    .property-report-table{
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    .property-report-table td {
+                        padding: 5px;
+                    }
+                </style>
+                
+                <!-- HTML structure -->
+	            <div class="page">
+	                <h2>Report Estate</h2>
+	                <p>This object's name is <span t-field="doc.name"/></p>
+
+	                <table class="property-report-table">
+	                	<tr>
+	                		<td><span t-field="doc.name"/></td>
+	                		<td><span t-field="doc.postcode"/></td>
+	                		<td><span t-field="doc.date_availability"/></td>
+	                		<td><span t-field="doc.expected_price"/></td>
+	                		<td><span t-field="doc.selling_price"/></td>
+	                	</tr>
+	                </table>
+
+	            </div>
+	        </t>
+        </template>
+
+    </data>
+</odoo>
+
+5. kalian juga bisa menambahkan styling CSS seperti pada contoh di atas 
+
+6. In HTML, the span tag is an inline container element 
+   that can be used to mark up a section of text or document.
+
+==============================================================
+COSTUMIZING EXISTING QWEB OUTPUT
+
+1. go to setting 
+2. click Technical
+3. search for action (Report)
+4. serach your own module (in this case estate property) report
+5. click Qweb Views
+6. cari report yg dituju disini saya menggunakan report_estate_property_document
+7. copy External ID
+
+this is the example of the XML scripts
+
+<odoo>
+    <data>
+      <template id="report_estate_inherit" 
+                inherit_id="estate.report_estate_property_document">
+
+        <xpath expr="//tr" position="before">
+          <h1>
+            Hello World
+          </h1>
+        </xpath>
+      </template>
+    </data>
+</odoo>
+
+<template>: This tag is used to define or modify a Qweb template.
+
+id="report_estate_inherit": This is the unique identifier for the new template. 
+It’s required for every template in Odoo.
+
+inherit_id="estate.report_estate_property_document": This attribute specifies 
+the id of the template that you want to extend or modify. 
+In this case, the report_estate_property_document template from the estate module is being inherited.
+
+<xpath>: This tag is used to locate and modify specific elements within the inherited template.
+
+expr="//tr": This is an XPath expression used to target specific elements 
+in the inherited template. In this example, it targets all <tr> (table row) elements.
+
+position="before": This attribute defines where the new content 
+should be inserted relative to the element found by the XPath expression.
+
+kesimpulannya adalah kita bisa memodifikasi output QWEB pdf
+dengan menggunakan template XML yg berisi struktur HTML dan CSS nya (kalau ada)
+
+dengan menggunakan template id baru dan eksternal ID milik module lain 
+disini template barunya adalah report_estate_inherit
+dan external_id (inherit_id) adalah estate.report_estate_property_document
+
+ini sangat berguna untuk memodifikasi report dari module yg sudah ada
+seperti sales_order_report, purchase_order_report, invoice_report dll
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

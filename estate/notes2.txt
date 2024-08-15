@@ -1,0 +1,318 @@
+==============================================================
+32. ACCESS RIGHTS (Permission Via Odoo App)
+
+Access Rights in Odoo are a way to control what actions a user can perform 
+within the system. They define the level of access a user has to various models, 
+menus, and features in Odoo, ensuring that users can only see and 
+do what is necessary for their role.
+
+1. go to setting 
+2. at the top navbar click Users&Companies
+3. click users from dropdown menus
+4. choose your user (in this case I choose estate staff that I've been created)
+5. so many menus that you can change the permission 
+   (Administration or user etc.)
+6. you can change the password in the user setting (click the gear button)
+7. save
+8. login with user account that you've created
+
+# ENABLE/DISABLE CRUD
+1. In the user setting click Access Rights
+2. find for estate in the search bar
+3. you can choose to enable or disable the permission to (Creat, Read, Write, Delete) 
+
+# ENABLE/DISABLE CRUD VIA GROUP
+1. go to setting 
+2. at the top navbar click Users&Companies
+3. click Groups from the dropdown menus
+4. create new Groups
+5. name it Estate Property Staff
+6. add new line
+7. choose your user name (in this case Estate_property)
+8. at the bottom navbar (notebook in xml) choose views
+9. add new line
+10. search what views you need (in this case estate)
+11. just check the necessary list you need
+12. in the Access Rigths navbar add a new line
+13. fill the column:
+    name -> fill with what ever you want
+    model -> choose your model (in this case I choose Estate Property)
+14. check the checkbox (Creat, Read, Write, Delete)
+
+
+==============================================================
+33. PERMISSION SETUP VIA CSV FILE
+
+VIA GROUP
+1. click setting 
+2. click user Users&Companies pilih Groups
+3. click list untuk group yg ingin dipilih (disini saya pilih estate property user)
+4. click action lalu export
+5. checklist I want to update data (import-compatible export)
+6. pilih field yg ingin di export 
+7. pilih CSV 
+8. export 
+9. buka filenya, rapihkan berdasarkan delimiternya agar memiliki baris dan kolom
+   pada semua datanya, isi dengan group_1 - group_3 pd bagian id. 
+   isi Estate Property Role 1 - sampai 3 lalu save
+10.uncheck group yang tadi lalu klik gerigi 
+11.click import records
+12.pilih csv file yg barusan kita update 
+13.test filenya apabila `Everything seems valid.` klik import
+
+VIA TECHNICAL 
+1. click Technical di bagian navbar atas lalu pilih Access Rights
+2. click new Access Rights (kalau mau bikin baru)
+3. cari estate lalu checklis estate access (Estate Property Staff) 
+4. click action pilih export  
+5. checklist I want to update data (import-compatible export)
+6. pilih field yg ingin di export 
+7. pilih CSV 
+8. export 
+9. buka filenya lalu buat row baru dengan isian yg dinginkan 
+   contoh: 
+   id	group_id	model_id	name	perm_read	perm_write	perm_create	perm_unlink
+   permission_1	Estate Property Role 1	Real Estate Property Type	estate property type access	TRUE	TRUE	TRUE	FALSE
+
+
+1. copy file csv yg sudah di download (access group, model access)
+2. copy ke folder (directory) data di dalam estate module
+3. rename estate group menjadi res.group.csv 
+4. renane model access menjadi ir.model.access.csv
+5. add path to the manifest.py
+   'data': [
+      ...
+      'data/res.groups.csv',
+      'data/ir.model.access.csv',
+      ...   
+   ]
+
+
+==============================================================
+34. SERVE API
+
+1. ke module learn_customization ada folder controller
+2. click file controller.py
+3. di dalamnya bakal ada scripts seperti di bawah
+
+from odoo import http
+
+class LearnCustomization(http.Controller):
+    @http.route('/learn_customization/learn_customization', auth='public')
+    def index(self, **kw):
+        return "Hello, world"
+
+penjelasan:
+-from odoo: This indicates that you are importing something from Odoo's core framework.
+-import http: You're specifically importing the http module, 
+ which provides the necessary tools to handle web requests and define routes.
+-class LearnCustomization: This defines a new class named LearnCustomization.
+-(http.Controller): Your class inherits from http.Controller, 
+ which means it can use all the features provided by this parent class 
+ to handle HTTP requests.
+-@http.route: This is a decorator that defines a route (a specific URL path) 
+ that will trigger a function.
+-'/learn_customization/learn_customization': This is the URL path that will be mapped 
+ to the function below.
+-**def index(self, kw): This defines a function named index inside 
+ the LearnCustomization class. 
+ -self: Refers to the instance of the class.
+ -**kw: This allows the function to accept any number of keyword arguments 
+   (additional parameters).
+
+-return "Hello, world": When this function is called, 
+ it returns the plain text "Hello, world" as a response.
+
+4. buat folder baru di dalam estate module dgn nama controller
+5. di dalamnya buat python file berisi __init__.py dan controllers.py
+6. di dalam __init__.py isi dengan `from . import controllers`
+7. di dalam controllers.py isi dengan seperti contoh di atas
+8. dan isi di __init__.py milik estate module dengan `from . import controllers`
+   maksudnya adalah kita menginisialisasi folder controllers dlm bentuk package
+9. buka tab incognito dan paste url link yang telah dibuat
+ 
+
+==============================================================
+35. API FROM ODOO APPS (API REST)
+
+1. pergi ke apps.odoo.com cari API rest (Smile API Rest)
+2. donwload lalu ekstrak
+3. taruh folder yg telah di ekstrak ke dalam folder addons dimana ada estate module
+4. update file manifest.py nya, ubah "version": "15.0.1.0.0" menjadi "15.0.1"
+5. restart odoo service, reload odoo app di browser.
+6. pergi ke app manu, update app list 
+7. jika error nya seperti: 
+   Since 17.0, the "attrs" and "states" attributes are no longer used.
+   View: api.rest.version.form in smile_api_rest/views/api_rest_version_views.xml
+8. buka file api_rest_version_views.xml ganti attrs menjadi invisible 
+   contoh:
+   ganti attrs="{'invisible': [('active', '=', True)]}"
+   menjadi invisible="active==True"
+
+   ganti attrs="{'invisible': [('active_log', '=', False)]}"
+   menjadi invisible = "active_log==False"
+
+   di api_rest_path_views.xml
+   ganti attrs="{'required': [('method', '=', 'get')]}"
+   menjadi required="method=='get'"
+
+   ganti attrs="{'invisible': [('method', 'not in', ['post', 'put'])]}"
+   menjadi invisible="method != 'post' or method != 'put'"
+
+   ganti attrs="{'readonly': [('default_value', 'not in', ['', False])]}"
+   menjadi readonly="default_value != False"
+
+   di api_rest_log_views.xml 
+   ganti attrs="{'invisible': [('length_response_data', '&lt;=', 5000)]}"
+   menjadi invisible="length_response_data&lt;=5000"
+
+9. update app list lagi
+10.apabila berhasil klik applikasi API REST
+11.klik new isi number versionnya lalu save
+12.add new line isi requirementsnya (name, model, API version, method, fields)
+13.Go to API docs (swagger)
+14.authoraze, isi apikey dgn apikey di tab security (API REST) yg telah dibuat
+15.try it out dan execute
+
+--FYI--
+Odoo use semantic versioning (SemVer) for its modules.
+
+Semantic versioning in Odoo, like in other software projects, 
+is a versioning system that follows a specific format to indicate 
+the nature of changes in the software. The version number is typically 
+in the form of MAJOR.MINOR.PATCH, where:
+
+MAJOR: Incremented when there are incompatible changes that break 
+backward compatibility. For example, moving from Odoo 13 to Odoo 14 
+would be considered a major version change.
+
+MINOR: Incremented when new features are added in a backward-compatible manner. 
+For instance, adding new functionalities to a module without breaking existing 
+features could lead to a minor version update.
+
+PATCH: Incremented for backward-compatible bug fixes. This could involve 
+fixing issues or improving performance without altering the module's API 
+or adding new features.
+
+--Odoo's Versioning Scheme--
+Odoo extends this standard by adding two additional components:
+
+Odoo Version (XX.YY): Specifies the Odoo version the module is compatible with.
+Module Version (X.Y.Z): Follows the standard SemVer for module-specific changes.
+Example:
+
+15.0.1.0.0:
+Odoo version: 15.0
+Module version: 1.0.0
+
+
+
+==============================================================
+36. CONNECTING ODOO TO OTHER APPLICATION (EXTERNAL API)
+
+--FYI--
+API adalah singkatan dari Application Programming Interface. 
+Dalam konteks website, API bertindak sebagai jembatan yang menghubungkan 
+berbagai komponen atau aplikasi.
+
+from odoo import http
+import requests
+import json
+
+class EstateProperty(http.Controller):
+
+    @http.route('/test/Property', auth='public')
+    def test_property(self, **kw):
+        api_url = "https://api.bridgedataoutput.com/...c6f96a6ff71b138424f21"
+
+        response = requests.get(api_url)
+
+        return json.dumps(response.json())
+
+==============================================================
+37. ODOO MASTER PASSWORD 
+
+buka halaman 
+http://localhost:8069/web/database/manager
+
+master password dibutuhkan untuk:
+1. restore database
+2. backup database
+3. create a new database
+
+apa yg terjadi apabila kita lupa master password kita?
+1. pergi ke folder aplikasi Odoo nya
+2. server -> odoo.conf dan buka file nya dengan text editor apapun
+3. beri semicolon diawal seperti di bawah
+   ; admin_passwd = $pbkdf2-sha...
+4. save dan restart odoo service
+5. reload http://localhost:8069/web/database/manager
+6. set a new master password (odoo conf will encrypted the new password) 
+   in odoo.conf 
+
+cara mengatasi error Database backup error: Command `pg_dump` not found.
+(Backup database)
+1. pergi ke folder aplikasi odoo
+2. ke folder server -> buka file odoo.conf dgn text editor
+3. ubah pg_path default menjadi folder postgreSQL yg kalian pakai
+   contoh: 
+   ubah pg_path = C:\Odoo\PostgreSQL\bin
+   menjadi pg_path = C:\Program Files\PostgreSQL\16\bin
+
+
+==============================================================
+38. ADD DEMO DATA TO ODOO APPLICATION
+
+1. buat demo folder di dalam estate module
+2. buat file estate_property_tag_demo.xml 
+3. isi seperti pada file yg telah saya buat
+4. update manifest.py dengan 'demo/estate_property_tag_demo.xml',
+5. restart odoo service update estate module
+6. lihat di menu estate property tag menu apakah datanya masuk
+
+--FYI-- 
+1. kalau mau buat database baru dengan demo data pastikan 
+   email dan password tidak lupa karena bukan Administrator 
+   ataupun user lain yang bisa akses melainkan email dan 
+   password yg didaftarkan lah yg bisa akses.
+
+==============================================================
+39. SUBMIT CUSTOM ODOO APP TO ODOO APP STORE
+
+1. pergi ke https://apps.odoo.com/apps
+2. klik submit dan isi Register your Git repository dengan repo yg ingin di submit
+   dengan cara klik repo kalian lalu klik Code.
+3. copy kode SSH lalu paste kan di sini `Register your Git repository` 
+4. tambahkan versi dari brach yg kalian buat contoh:
+   git@github.com:Bisyri07/Odoo.git#17.0
+5. klik scan
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
